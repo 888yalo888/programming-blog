@@ -47,10 +47,6 @@ const upload = multer({
   fileFilter: multerFilter,
 });
 
-const authToken = createAuthToken(process.env.PORTIVE_API_KEY as string, {
-    expiresIn: "24h",
-});
-
 
 app.post(
     "/api/image",
