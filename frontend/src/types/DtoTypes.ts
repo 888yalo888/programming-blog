@@ -24,3 +24,7 @@ export interface PageResult<T>{
     page_results: Array<T>;
 }
 
+export interface CommentsModel {
+    text: string | null;
+}
+

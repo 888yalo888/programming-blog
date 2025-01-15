@@ -117,41 +117,44 @@ app.post("/api/article", async (req, res) => {
 });
 
 
-app.get("/api/article/:id", async(req, res) => {
+app.get("/api/article/:id", async (req, res) => {
     const articleId = parseInt(req.params.id, 10);
 
     try {
-        const postById = await pool.query('SELECT title, text FROM articles WHERE id = $1', [articleId]);
+        const postById = await pool.query(
+            "SELECT title, text, id FROM articles WHERE id = $1",
+            [articleId]
+        );
         res.status(200).json(postById.rows[0]);
     } catch (err) {
         console.error(err);
-        res.status(500).json({ message: 'error retrieving a post' });
-
+        res.status(500).json({ message: "error retrieving a post" });
     }
-})
+});
 
 app.get("/api/articles", async (req, res) => {
-
     const { pageNumber, resultsOnPage } = req.query;
     let actualPageNumber: number = 1; //OFFSET// how many articles to skip
     let actualResultsOnPage: number = 5; //LIMIT//how many articles on the page
 
-
     //its not edge cases its converting pageNumber string to number and assigning it to actualPageNumber
-    if (!!pageNumber && !isNaN(parseInt(pageNumber.toString()))) { //toString because it's ts and we have to make sure its a string first
-        actualPageNumber = parseInt(pageNumber.toString()); 
+    if (!!pageNumber && !isNaN(parseInt(pageNumber.toString()))) {
+        //toString because it's ts and we have to make sure its a string first
+        actualPageNumber = parseInt(pageNumber.toString());
     }
 
-     if (!!resultsOnPage && !isNaN(parseInt(resultsOnPage.toString()))) {
+    if (!!resultsOnPage && !isNaN(parseInt(resultsOnPage.toString()))) {
         actualResultsOnPage = parseInt(resultsOnPage.toString());
     }
 
-
     try {
-        const resultsCount = await pool.query('SELECT COUNT(*) FROM articles WHERE is_published=true');
+        const resultsCount = await pool.query(
+            "SELECT COUNT(*) FROM articles WHERE is_published=true"
+        );
 
-        const allPublishedArticles = await pool.query( 
-            "SELECT title, id, comments_count, likes_count,created_at FROM articles WHERE is_published=true LIMIT $1 OFFSET $2", [actualResultsOnPage, actualResultsOnPage * (actualPageNumber - 1)]
+        const allPublishedArticles = await pool.query(
+            "SELECT title, id, comments_count, likes_count,created_at FROM articles WHERE is_published=true LIMIT $1 OFFSET $2",
+            [actualResultsOnPage, actualResultsOnPage * (actualPageNumber - 1)]
         );
 
         res.status(200).json({
@@ -159,15 +162,49 @@ app.get("/api/articles", async (req, res) => {
             page_info: {
                 page_number: actualPageNumber,
                 page_size: actualResultsOnPage,
-                result_count: parseInt(resultsCount.rows[0].count),//number of articles
+                result_count: parseInt(resultsCount.rows[0].count), //number of articles
             },
         });
-        
     } catch (err) {
         console.error(err);
         res.status(500).json({ message: "error retrieving articles" });
     }
-})
+});
+
+app.post("/api/article/:id/comment", async (req, res) => {
+    //console.log(req.body);
+
+    const { user_id, comment } = req.body;
+    const articleId = parseInt(req.params.id, 10);
+
+    try {
+        const commentResult = await pool.query(
+            "INSERT INTO comments_info (user_id, article_id,comment) VALUES ($1, $2, $3)",
+            [user_id, articleId, comment]
+        );
+        res.status(200).json(commentResult.rows[0]);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "" });
+    }
+
+    res.json(req.file);
+});
+
+app.get("/api/article/:id/comments", async (req, res) => {
+    const articleId = parseInt(req.params.id, 10);
+
+    try {
+        const commentsById = await pool.query(
+            "SELECT comment FROM comments_info WHERE article_id = $1",
+            [articleId]
+        );
+        res.status(200).json(commentsById.rows);
+    } catch (err) {
+        console.error(err);
+        res.status(500).json({ message: "error retrieving comments" });
+    }
+});
 
 
 app.listen(PORT, () => {

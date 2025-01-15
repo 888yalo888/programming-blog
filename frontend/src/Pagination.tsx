@@ -36,7 +36,7 @@ function Pagination(props: PaginationProps) {
             </button>
             <ul style={{ display: "flex", listStyle: "none", padding: 0 }}>
                 {Array.from({ length: props.totalPages }, (_, index) => (
-                    <li onClick={handleActivePage(index+1)}
+                    <li onClick={()=> handleActivePage(index+1)}
                         key={index}
                         style={{
                             margin: "0 10px",
