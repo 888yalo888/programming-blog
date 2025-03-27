@@ -2,7 +2,7 @@ import express from "express";
 import multer, { FileFilterCallback } from "multer";
 import fs from "node:fs";
 import { Pool } from "pg";
-import { Request } from "express";
+import { Request, Response, NextFunction } from "express";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
@@ -13,7 +13,17 @@ import session from "express-session";
 import { OAuth2Strategy as GoogleStrategy } from "passport-google-oauth";
 import cookieSession from "cookie-session";
 import connectPgSimple from "connect-pg-simple";
+import { body, param, query, validationResult } from "express-validator";
+import { ArticleRequest, QueryParams } from "./interfaces/interfaces";
 
+
+const sessionValidator = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.session.passport) {
+    res.status(401).send("You are not logged in");
+    return;
+  }
+  next();
+};
 const app = express();
 
 dotenv.config();
@@ -27,11 +37,12 @@ app.use(
 );
 
 const PgSession = connectPgSimple(session);
+
 const pool = new Pool({
   user: "postgres",
   host: "127.0.0.1",
   database: "blog",
-  password: "mysecretpassword",
+  password: process.env.POSTGRESQL_POOL_PASSWORD!,
   port: 5432,
 });
 
@@ -42,7 +53,7 @@ app.use(
       tableName: "session",
       createTableIfMissing: true,
     }),
-    secret: "superbaker",
+    secret: process.env.PG_SESSION_SECRET_WORD!,
     resave: false,
     saveUninitialized: false,
     cookie: { secure: false }, // Set to true in production with HTTPS
@@ -192,7 +203,7 @@ app.get(
   "/api/auth/google/callback", // token will be send to this route
   passport.authenticate("google", {
     successRedirect: "http://localhost:5173",
-    failureRedirect: "http://localhost:5173/auth",
+    failureRedirect: "http://localhost:5173",
   })
 );
 
@@ -208,24 +219,18 @@ passport.deserializeUser(function (user: any, cb) {
   });
 });
 
-app.post("/api/logout", function (req, res, next) {
-  if (req.session) {
-    req.session.destroy((err) => {
-      if (err) {
-        res.status(400).send("Unable to log out");
-      } else {
-        res.status(200).send("Logged out successful");
-      }
-    });
-  } else {
-    res.status(400).send("Session does not exist");
-  }
-  // req.logout(function (err) {
-  //   if (err) {
-  //     return next(err);
-  //   }
-  //   res.redirect("http://localhost:5173/logout");
-  // });
+app.post("/api/logout", sessionValidator, function (req, res, next) {
+  req.session.destroy((err) => {
+    if (err) {
+      res.status(400).send("Unable to log out");
+    } else {
+      res.status(200).send("Logged out successful");
+    }
+  });
+});
+
+app.get("/api/profile", sessionValidator, async function (req, res) {
+  res.status(200).json({ user: req.session.passport!.user });
 });
 
 app.post(
@@ -275,113 +280,196 @@ app.post(
   }
 );
 
-app.post("/api/article", async (req, res) => {
-  console.log(req.body);
+app.post(
+  "/api/article",
+  sessionValidator,
+  body("title").exists().isString().notEmpty(),
+  body("text").exists().isString().notEmpty(),
+  async (req, res) => {
+    const validationErrors = validationResult(req);
+    if (!validationErrors.isEmpty()) {
+      res.send({ errors: validationErrors.array() });
+      return;
+    }
+    console.log(req.body);
 
-  const { title, text, is_published } = req.body;
+    const { title, text, is_published } = req.body;
 
-  try {
-    const article = await pool.query(
-      "INSERT INTO articles (title, text,is_published) VALUES ($1, $2, $3)",
-      [title, text, is_published]
-    );
-    res.status(200).json(article.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "" });
+    try {
+      const article = await pool.query(
+        "INSERT INTO articles (title, text,is_published) VALUES ($1, $2, $3)",
+        [title, text, is_published]
+      );
+      res.status(200).json(article.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "" });
+    }
+
+    res.json(req.file);
   }
+);
 
-  res.json(req.file);
-});
+app.get(
+  "/api/article/:id",
+  sessionValidator,
+  param("id")
+    .notEmpty()
+    .isInt({ min: 1 })
+    .withMessage("id must be an integer greater than 1"),
+  async (req: ArticleRequest, res: Response) => {
+    const validationErrors = validationResult(req);
+    if (!validationErrors.isEmpty()) {
+      res.send({ errors: validationErrors.array() });
+      return;
+    }
 
-app.get("/api/article/:id", async (req, res) => {
-  const articleId = parseInt(req.params.id, 10);
+    const articleId = parseInt(req.params.id, 10);
 
-  try {
-    const postById = await pool.query(
-      "SELECT title, text, id FROM articles WHERE id = $1",
-      [articleId]
-    );
-    res.status(200).json(postById.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "error retrieving a post" });
+    try {
+      const postById = await pool.query(
+        "SELECT title, text, id FROM articles WHERE id = $1",
+        [articleId]
+      );
+      res.status(200).json(postById.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "error retrieving a post" });
+    }
   }
-});
+);
 
-app.get("/api/articles", async (req, res) => {
-  const { pageNumber, resultsOnPage } = req.query;
-  let actualPageNumber: number = 1; //OFFSET// how many articles to skip
-  let actualResultsOnPage: number = 5; //LIMIT//how many articles on the page
 
-  //its not edge cases its converting pageNumber string to number and assigning it to actualPageNumber
-  if (!!pageNumber && !isNaN(parseInt(pageNumber.toString()))) {
-    //toString because it's ts and we have to make sure its a string first
-    actualPageNumber = parseInt(pageNumber.toString());
+app.get(
+  "/api/articles",
+  sessionValidator,
+  query("pageNumber")
+    .trim()
+    .isInt({ min: 1 })
+    .withMessage("Page number must be an integer greater than or equal to 1")
+    .toInt(),
+  query("resultsOnPage")
+    .trim()
+    .isInt({ min: 1 })
+    .withMessage("Page number must be an integer greater than or equal to 1")
+    .toInt(),
+  async (req: Request<{}, {}, {}, QueryParams>, res: Response) => {
+    const validationErrors = validationResult(req);
+    if (!validationErrors.isEmpty()) {
+      res.send({ errors: validationErrors.array() });
+      return;
+    }
+
+    const { pageNumber, resultsOnPage } = req.query;
+    let actualPageNumber: number = 1; //OFFSET// how many articles to skip
+    let actualResultsOnPage: number = 5; //LIMIT//how many articles on the page
+
+    //its not edge cases its converting pageNumber string to number and assigning it to actualPageNumber
+    if (!!pageNumber && !isNaN(parseInt(pageNumber.toString()))) {
+      //toString because it's ts and we have to make sure its a string first
+      actualPageNumber = parseInt(pageNumber.toString());
+    }
+
+    if (!!resultsOnPage && !isNaN(parseInt(resultsOnPage.toString()))) {
+      actualResultsOnPage = parseInt(resultsOnPage.toString());
+    }
+
+    try {
+      const resultsCount = await pool.query(
+        "SELECT COUNT(*) FROM articles WHERE is_published=true"
+      );
+
+      const allPublishedArticles = await pool.query(
+        "SELECT title, id, comments_count, likes_count,created_at FROM articles WHERE is_published=true LIMIT $1 OFFSET $2",
+        [actualResultsOnPage, actualResultsOnPage * (actualPageNumber - 1)]
+      );
+
+      res.status(200).json({
+        page_results: allPublishedArticles.rows,
+        page_info: {
+          page_number: actualPageNumber,
+          page_size: actualResultsOnPage,
+          result_count: parseInt(resultsCount.rows[0].count), //number of articles
+        },
+      });
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "error retrieving articles" });
+    }
   }
+);
 
-  if (!!resultsOnPage && !isNaN(parseInt(resultsOnPage.toString()))) {
-    actualResultsOnPage = parseInt(resultsOnPage.toString());
+app.post(
+  "/api/article/:id/comment",
+  sessionValidator,
+  param("id")
+    .isInt({ min: 1 })
+    .withMessage("Article id must be an integer greater than 0"),
+  body("comment")
+    .exists()
+    .isString()
+    .trim()
+    .isLength({ min: 1 })
+    .withMessage("Comment must be a non-empty string"),
+  async (req: ArticleRequest, res: Response) => {
+    //console.log(req.body);
+    const validationErrors = validationResult(req);
+    if (!validationErrors.isEmpty()) {
+      res.send({ errors: validationErrors.array() });
+      return;
+    }
+
+    // if (!req.session.passport) {
+    //   res.status(401).send("No session found");
+    //   return;
+    // }
+
+    // const user_id = req.session.passport?.user.id ?? null;
+    const user_id = req.body.user_id;
+    const { comment } = req.body;
+    const articleId = parseInt(req.params.id, 10);
+
+    try {
+      const commentResult = await pool.query(
+        "INSERT INTO comments_info (user_id, article_id,comment) VALUES ($1, $2, $3)",
+        [user_id, articleId, comment]
+      );
+      res.status(200).json(commentResult.rows[0]);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "" });
+    }
+
+    res.json(req.file);
   }
+);
 
-  try {
-    const resultsCount = await pool.query(
-      "SELECT COUNT(*) FROM articles WHERE is_published=true"
-    );
+app.get(
+  "/api/article/:id/comments",
+  sessionValidator,
+  param("id")
+    .isInt({ min: 1 })
+    .withMessage("Article id must be an integer greater than 0"),
+  async (req: ArticleRequest, res: Response) => {
+    const validationErrors = validationResult(req);
+    if (!validationErrors.isEmpty()) {
+      res.send({ errors: validationErrors.array() });
+      return;
+    }
+    const articleId = parseInt(req.params.id, 10);
 
-    const allPublishedArticles = await pool.query(
-      "SELECT title, id, comments_count, likes_count,created_at FROM articles WHERE is_published=true LIMIT $1 OFFSET $2",
-      [actualResultsOnPage, actualResultsOnPage * (actualPageNumber - 1)]
-    );
-
-    res.status(200).json({
-      page_results: allPublishedArticles.rows,
-      page_info: {
-        page_number: actualPageNumber,
-        page_size: actualResultsOnPage,
-        result_count: parseInt(resultsCount.rows[0].count), //number of articles
-      },
-    });
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "error retrieving articles" });
+    try {
+      const commentsById = await pool.query(
+        "SELECT comment FROM comments_info WHERE article_id = $1",
+        [articleId]
+      );
+      res.status(200).json(commentsById.rows);
+    } catch (err) {
+      console.error(err);
+      res.status(500).json({ message: "error retrieving comments" });
+    }
   }
-});
-
-app.post("/api/article/:id/comment", async (req, res) => {
-  //console.log(req.body);
-
-  const { user_id, comment } = req.body;
-  const articleId = parseInt(req.params.id, 10);
-
-  try {
-    const commentResult = await pool.query(
-      "INSERT INTO comments_info (user_id, article_id,comment) VALUES ($1, $2, $3)",
-      [user_id, articleId, comment]
-    );
-    res.status(200).json(commentResult.rows[0]);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "" });
-  }
-
-  res.json(req.file);
-});
-
-app.get("/api/article/:id/comments", async (req, res) => {
-  const articleId = parseInt(req.params.id, 10);
-
-  try {
-    const commentsById = await pool.query(
-      "SELECT comment FROM comments_info WHERE article_id = $1",
-      [articleId]
-    );
-    res.status(200).json(commentsById.rows);
-  } catch (err) {
-    console.error(err);
-    res.status(500).json({ message: "error retrieving comments" });
-  }
-});
+);
 
 app.listen(PORT, () => {
   console.log(`Running on Port ${PORT}`);
