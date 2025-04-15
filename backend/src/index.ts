@@ -6,18 +6,16 @@ import { Request, Response, NextFunction } from "express";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
-import { createAuthToken } from "@portive/auth";
 import dotenv from "dotenv";
 import passport from "passport";
 import session from "express-session";
 import { OAuth2Strategy as GoogleStrategy } from "passport-google-oauth";
-import cookieSession from "cookie-session";
 import connectPgSimple from "connect-pg-simple";
 import { body, param, query, validationResult } from "express-validator";
 import { ArticleRequest, QueryParams } from "./interfaces/interfaces";
 
-
 const sessionValidator = (req: Request, res: Response, next: NextFunction) => {
+  console.log("Session Data:", req.session.passport);
   if (!req.session.passport) {
     res.status(401).send("You are not logged in");
     return;
@@ -93,7 +91,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: "/api/auth/google/callback", //if authentication is successful it brings us to this callbackURLso tr
+      callbackURL: "/api/auth/google/callback", //if authentication is successful it brings us to this callbackURL so tr
       accessType: "offline",
       prompt: "consent",
     },
@@ -160,6 +158,16 @@ passport.use(
             id: newUser.rows[0].id,
             name: profile.displayName,
           };
+
+          //if user creation was successful and token was successfully created in db then I can add a role to a user
+          const newUserRole = await pool.query(
+            "INSERT INTO user_roles (role_id, user_id) VALUES ($1, $2) RETURNING * ",
+            [3, newUser.rows[0].id]
+          );
+
+          if (newUserRole.rows.length === 0) {
+            return done("Role can not be created", null);
+          }
 
           //8
           return done(null, user);
@@ -231,10 +239,11 @@ app.post("/api/logout", sessionValidator, function (req, res, next) {
 
 app.get("/api/profile", sessionValidator, async function (req, res) {
   res.status(200).json({ user: req.session.passport!.user });
-});
+}); //session validator needed
 
 app.post(
   "/api/image",
+  sessionValidator,
   upload.single("image"),
   async (req, res): Promise<void> => {
     //uploads images and only images
@@ -278,7 +287,7 @@ app.post(
 
     res.status(200).send(imageURL);
   }
-);
+); //session validator needed
 
 app.post(
   "/api/article",
@@ -308,11 +317,10 @@ app.post(
 
     res.json(req.file);
   }
-);
+); //session validator needed
 
 app.get(
   "/api/article/:id",
-  sessionValidator,
   param("id")
     .notEmpty()
     .isInt({ min: 1 })
@@ -342,7 +350,6 @@ app.get(
 
 app.get(
   "/api/articles",
-  sessionValidator,
   query("pageNumber")
     .trim()
     .isInt({ min: 1 })
@@ -419,13 +426,13 @@ app.post(
       return;
     }
 
-    // if (!req.session.passport) {
-    //   res.status(401).send("No session found");
-    //   return;
-    // }
+    if (!req.session.passport) {
+      res.status(401).send("No session found");
+      return;
+    }
 
-    // const user_id = req.session.passport?.user.id ?? null;
-    const user_id = req.body.user_id;
+    const user_id = req.session.passport?.user.id ?? null;
+    // const user_id = req.body.user_id;
     const { comment } = req.body;
     const articleId = parseInt(req.params.id, 10);
 
@@ -442,11 +449,10 @@ app.post(
 
     res.json(req.file);
   }
-);
+); //session validator needed
 
 app.get(
   "/api/article/:id/comments",
-  sessionValidator,
   param("id")
     .isInt({ min: 1 })
     .withMessage("Article id must be an integer greater than 0"),

@@ -11,7 +11,7 @@ import LoginSignup from "./LoginSignup.tsx";
 import { GoogleOAuthProvider } from "@react-oauth/google";
 
 axios.defaults.baseURL = "http://localhost:3000/api";
-const clientId = process.env.REACT_APP_GOOGLE_CLIENT_ID;
+const clientId = import.meta.env.VITE_REACT_APP_GOOGLE_CLIENT_ID;
 
 
 createRoot(document.getElementById("root")!).render(
