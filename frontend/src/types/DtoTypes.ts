@@ -28,3 +28,11 @@ export interface CommentsModel {
     text: string | null;
 }
 
+export interface UserProfile {
+  id: string;
+  name: string;
+  email: string;
+  role: string;
+  photo: string;
+}
+

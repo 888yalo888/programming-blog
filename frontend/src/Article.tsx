@@ -15,7 +15,7 @@ function Article() {
 
     useEffect(() => {
         (async () => {
-            try {
+            try {  
                 const response = await axios.get<ArticleModel>(
                     `/article/${id}`
                 );

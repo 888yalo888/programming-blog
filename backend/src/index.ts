@@ -1,15 +1,14 @@
 import express from "express";
 import multer, { FileFilterCallback } from "multer";
-import fs from "node:fs";
 import { Pool } from "pg";
 import { Request, Response, NextFunction } from "express";
 import sharp from "sharp";
 import { v4 as uuidv4 } from "uuid";
 import cors from "cors";
 import dotenv from "dotenv";
-import passport from "passport";
+import passport, { Profile } from "passport";
 import session from "express-session";
-import { OAuth2Strategy as GoogleStrategy } from "passport-google-oauth";
+import { OAuth2Strategy as GoogleStrategy, VerifyFunction } from "passport-google-oauth";
 import connectPgSimple from "connect-pg-simple";
 import { body, param, query, validationResult } from "express-validator";
 import { ArticleRequest, QueryParams } from "./interfaces/interfaces";
@@ -22,6 +21,39 @@ const sessionValidator = (req: Request, res: Response, next: NextFunction) => {
   }
   next();
 };
+
+const isAdmin = async (req: Request, res: Response, next: NextFunction) => {
+  console.log("isAdmin function entered", req.session.passport);
+  const userId = req.session.passport?.user.id;
+
+  try {
+    // TODO join role table with user_roles by user_id and get role from there 
+    const userFromRoles = await pool.query(
+      "SELECT * FROM user_roles WHERE user_id = $1",
+      [userId]
+    );
+    console.log("userFromRoles", userFromRoles);
+
+    if (userFromRoles.rows.length === 0) {
+      // User has no roles
+      res.status(403).send("Forbidden: You do not have any roles");
+      return;
+    }
+
+    const roleId = userFromRoles.rows[0].role_id;
+
+    // TODO check not a number but an actual word ADMIN
+    if (roleId !== 2) {
+      res.status(403).send("Forbidden: You do not have admin privileges");
+      return;
+    }
+    next();
+  } catch (err) {
+    console.error("Error executing query", err);
+    res.status(500).send("Internal Server Error");
+  }
+};
+ 
 const app = express();
 
 dotenv.config();
@@ -86,6 +118,90 @@ const upload = multer({
   fileFilter: multerFilter,
 });
 
+const findUserInDbOrNull = async (email: string) => {
+  try {
+    const existingUser = await pool.query(
+      "SELECT * FROM users WHERE email = $1",
+      [email]
+    );
+    //console.log('existingUser:', existingUser)
+
+    if (existingUser.rows.length > 0) {
+      return {
+        id: existingUser.rows[0].id,
+        name: existingUser.rows[0].name,
+      };
+    }
+    return null;
+  } catch (err) {
+    console.log(err);
+    return null;
+  }
+};
+
+const registerUser = async (accessToken:string, refreshToken:string, profile:any, done:VerifyFunction) => {
+  const client = await pool.connect();
+  try {
+    await client.query("BEGIN");
+    //1 if user is not found I create and insert a new user into the table
+    const newUser = await pool.query(
+      `INSERT INTO users (email, name, photo, google_id) 
+                         VALUES ($1, $2, $3, $4) 
+                         RETURNING id`, //return an object like {rows: [{id:1}]}
+      [
+        profile._json.email,
+        profile._json.name, // name
+        profile._json.picture, // photo URL
+        accessToken,
+      ]
+    );
+    //2 return error if not successful
+    if (newUser.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return done("User can not be created", null);
+    }
+    //3  code keeps running if user creation was successful I create a record in tokens
+    const newToken = await pool.query(
+      "INSERT INTO tokens (access_token, refresh_token, profile_id) VALUES ($1, $2, $3) RETURNING * ",
+      [accessToken, refreshToken, profile.id]
+    );
+
+    //4 returns an error if creation cant be completed
+    if (newToken.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return done("Token can not be created", null);
+    }
+
+    //5 continue running if creation was successful
+    const user = {
+      id: newUser.rows[0].id,
+      name: profile.displayName,
+    };
+
+    //6 if user creation was successful and token was successfully created in db then I can add a role to a user
+    const newUserRole = await pool.query(
+      "INSERT INTO user_roles (role_id, user_id) VALUES ($1, $2) RETURNING * ",
+      [1, newUser.rows[0].id]
+    );
+
+    //7 returns an error if creation cant be completed
+    if (newUserRole.rows.length === 0) {
+      await client.query("ROLLBACK");
+      return done("Role can not be created", null);
+    }
+    //8 returns final user
+    await client.query("COMMIT");
+    return done(null, user);
+  } catch (err) {
+    await client.query("ROLLBACK");
+    return done(err);
+  } finally {
+    console.log('finally entered and executed')
+    client.release();
+  }
+}
+
+
 passport.use(
   new GoogleStrategy(
     {
@@ -96,104 +212,15 @@ passport.use(
       prompt: "consent",
     },
     async function (accessToken, refreshToken, profile, done) {
-      console.log(accessToken, refreshToken, profile);
+      console.log('access token:', accessToken, 'refresh token:', refreshToken, 'profile:', profile);
 
-      try {
-        // if user exist I return this user
-        const existingUser = await pool.query(
-          "SELECT * FROM users WHERE email = $1",
-          [profile._json.email]
-        );
-
-        if (existingUser.rows.length > 0) {
-          const foundUserObject = {
-            id: existingUser.rows[0].id,
-            name: existingUser.rows[0].name,
-          };
-
-          return done(null, foundUserObject);
-        }
-      } catch (err) {
-        return done(err);
+      // if user exist I return this user 
+      const foundUserObject = await findUserInDbOrNull(profile._json.email); // use object like {id:25, name: 'Olga Orlova'}
+         
+      if (foundUserObject) {
+        return done(null, foundUserObject);
       }
-
-      try {
-        //1-2 request tokens resource and check if token and profile.id exist
-        const userProfileIdRefreshToken = await pool.query(
-          "SELECT * FROM tokens WHERE profile_id = $1 AND refresh_token = $2",
-          [profile.id, accessToken]
-        );
-
-        //3 if token is not found I create a user and return an error if its not successful
-        if (userProfileIdRefreshToken.rows.length === 0) {
-          const newUser = await pool.query(
-            `INSERT INTO users (email, name, photo, google_id) 
-                         VALUES ($1, $2, $3, $4) 
-                         RETURNING id`, //return an object like {rows: [{id:1}]}
-            [
-              profile._json.email,
-              profile._json.name, // name
-              profile._json.picture, // photo URL
-              accessToken,
-            ]
-          );
-          //4 return error if not successful
-          if (newUser.rows.length === 0) {
-            return done("User can not be created", null);
-          }
-
-          //5 code keeps running if user creation was successful I create a record in tokens
-          const newToken = await pool.query(
-            "INSERT INTO tokens (access_token, refresh_token, profile_id) VALUES ($1, $2, $3) RETURNING * ",
-            [accessToken, refreshToken, profile.id]
-          );
-
-          //6 returns an error if creation cant be completed
-          if (newToken.rows.length === 0) {
-            return done("Token can not be created", null);
-          }
-
-          //continue running if creation was successful
-          const user = {
-            id: newUser.rows[0].id,
-            name: profile.displayName,
-          };
-
-          //if user creation was successful and token was successfully created in db then I can add a role to a user
-          const newUserRole = await pool.query(
-            "INSERT INTO user_roles (role_id, user_id) VALUES ($1, $2) RETURNING * ",
-            [3, newUser.rows[0].id]
-          );
-
-          if (newUserRole.rows.length === 0) {
-            return done("Role can not be created", null);
-          }
-
-          //8
-          return done(null, user);
-        } else {
-          //9 if token was found I search user with id
-          const foundUser = await pool.query(
-            "SELECT * FROM users WHERE google_id = $1",
-            [profile.id]
-          );
-
-          //10 user is not found
-          if (foundUser.rows.length === 0) {
-            return done("Use is not found", null);
-          }
-
-          //11 use is found then I return this user
-          const foundUserObject = {
-            id: foundUser.rows[0].id,
-            name: profile.displayName,
-          };
-
-          done(null, foundUserObject);
-        }
-      } catch (err) {
-        return done(err);
-      }
+      return registerUser(accessToken, refreshToken, profile, done);
     }
   )
 );
@@ -238,7 +265,18 @@ app.post("/api/logout", sessionValidator, function (req, res, next) {
 });
 
 app.get("/api/profile", sessionValidator, async function (req, res) {
-  res.status(200).json({ user: req.session.passport!.user });
+  // TODO go to db and collect information about user(name,id, role, picture) and pass it in response
+  // TODO write and sql query with joins and collect the info about user
+
+  const userQueryResult = await pool.query(
+    "SELECT users.id, users.name, users.photo, roles.role FROM users LEFT JOIN user_roles ON users.id=user_roles.user_id LEFT JOIN roles ON user_roles.role_id=roles.id WHERE users.id=$1",
+    [req.session.passport!.user.id]
+  );
+  //console.log('userInfoRole',userInfo.rows[0].role);
+
+  res
+    .status(200)
+    .json({user: userQueryResult.rows[0]});
 }); //session validator needed
 
 app.post(
@@ -290,7 +328,7 @@ app.post(
 ); //session validator needed
 
 app.post(
-  "/api/article",
+  "/api/article",isAdmin,
   sessionValidator,
   body("title").exists().isString().notEmpty(),
   body("text").exists().isString().notEmpty(),
@@ -306,16 +344,17 @@ app.post(
 
     try {
       const article = await pool.query(
-        "INSERT INTO articles (title, text,is_published) VALUES ($1, $2, $3)",
+        "INSERT INTO articles (title, text,is_published) VALUES ($1, $2, $3) RETURNING *",
         [title, text, is_published]
       );
+      console.log(article.rows[0]);
       res.status(200).json(article.rows[0]);
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "" });
     }
 
-    res.json(req.file);
+    // res.json(req.file);
   }
 ); //session validator needed
 
