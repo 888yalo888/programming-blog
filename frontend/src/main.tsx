@@ -7,8 +7,8 @@ import { BrowserRouter, Routes, Route } from 'react-router';
 import ArticleList from './ArticleList.tsx';
 import Article from './Article.tsx';
 import Nav from './Nav.tsx';
-import LoginSignup from "./LoginSignup.tsx";
 import { GoogleOAuthProvider } from "@react-oauth/google";
+import { ProfileContextProvider } from '../context/ProfileContext'
 
 axios.defaults.baseURL = "http://localhost:3000/api";
 const clientId = import.meta.env.VITE_REACT_APP_GOOGLE_CLIENT_ID;
@@ -16,15 +16,17 @@ const clientId = import.meta.env.VITE_REACT_APP_GOOGLE_CLIENT_ID;
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <GoogleOAuthProvider clientId={clientId!}>
-      <BrowserRouter>
-        <Nav />
-        <Routes>
-          <Route path="/" element={<ArticleList />} />
-          <Route path="/create-article" element={<CreateArticle />} />
-          <Route path="/article/:id" element={<Article />} />
-        </Routes>
-      </BrowserRouter>
-    </GoogleOAuthProvider>
+    <ProfileContextProvider>
+      <GoogleOAuthProvider clientId={clientId!}>
+        <BrowserRouter>
+          <Nav />
+          <Routes>
+            <Route path="/" element={<ArticleList />} />
+            <Route path="/create-article" element={<CreateArticle />} />
+            <Route path="/article/:id" element={<Article />} />
+          </Routes>
+        </BrowserRouter>
+      </GoogleOAuthProvider>
+    </ProfileContextProvider>
   </StrictMode>
 );
