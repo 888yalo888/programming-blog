@@ -1,9 +1,9 @@
-import axios from "axios";
+import axios from './utils/axios.ts'
 import { useContext, useEffect, useState } from "react";
 import GoogleButton from "react-google-button";
 import { Link } from "react-router";
 import {UserProfile} from './types/DtoTypes';
-import ProfileContext from "../context/ProfileContext";
+import ProfileContext from "./context/ProfileContext";
 
 function Nav() {
   // const [profile, setProfile] = useState<UserProfile | null>(null);
@@ -25,6 +25,8 @@ function Nav() {
 
   const handleLogout = async () => {
     try {
+      await axios.get("/csrf-token");
+      
       const response = await axios.post(
         "http://localhost:3000/api/logout",
         {},

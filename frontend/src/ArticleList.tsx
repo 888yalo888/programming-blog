@@ -1,4 +1,4 @@
-import axios from "axios";
+import axios from './utils/axios.ts'
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import { ArticleModel, PageResult } from "./types/DtoTypes"; 

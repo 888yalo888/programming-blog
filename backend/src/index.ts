@@ -12,6 +12,15 @@ import { OAuth2Strategy as GoogleStrategy, VerifyFunction } from "passport-googl
 import connectPgSimple from "connect-pg-simple";
 import { body, param, query, validationResult } from "express-validator";
 import { ArticleRequest, QueryParams } from "./interfaces/interfaces";
+import { doubleCsrf } from "csrf-csrf";
+import cookieParser from "cookie-parser";
+import crypto from "crypto";
+
+declare module 'express-session' {
+  interface Session {
+    csrfSecret: string;
+  }
+}
 
 const sessionValidator = (req: Request, res: Response, next: NextFunction) => {
   console.log("Session Data:", req.session.passport);
@@ -86,10 +95,31 @@ app.use(
     secret: process.env.PG_SESSION_SECRET_WORD!,
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false }, // Set to true in production with HTTPS
+    cookie: {
+      secure: false,// Set to true in production with HTTPS
+      sameSite: "lax",
+     }, 
   })
 );
+app.use(passport.authenticate("session"));
 
+app.use(cookieParser());
+
+const {
+  validateRequest,
+  generateCsrfToken, // Use this in your routes to provide a CSRF token.
+  doubleCsrfProtection, // This is the default CSRF protection middleware.
+} = doubleCsrf({
+  getSecret: (req?: express.Request) => {
+    if (!req?.session?.csrfSecret) {
+      req!.session!.csrfSecret = crypto.randomBytes(32).toString("hex");
+    }
+    return req!.session!.csrfSecret;
+  },
+  getSessionIdentifier: (req) => req.session.id, // return the requests unique identifier
+});
+
+//app.use(doubleCsrfProtection);
 app.use(passport.initialize());
 app.use(passport.session());
 
@@ -97,7 +127,7 @@ app.use("/api/image", express.static("uploads"));
 
 const PORT = 3000;
 
-app.use(passport.authenticate("session"));
+
 
 const multerFilter = (
   req: Request,
@@ -212,7 +242,7 @@ passport.use(
       prompt: "consent",
     },
     async function (accessToken, refreshToken, profile, done) {
-      console.log('access token:', accessToken, 'refresh token:', refreshToken, 'profile:', profile);
+      console.log('access token:', accessToken, 'refresh token:', refreshToken, 'profile:', profile, 'doubleCsrfProtection: ', doubleCsrfProtection);
 
       // if user exist I return this user 
       const foundUserObject = await findUserInDbOrNull(profile._json.email); // use object like {id:25, name: 'Olga Orlova'}
@@ -254,15 +284,23 @@ passport.deserializeUser(function (user: any, cb) {
   });
 });
 
-app.post("/api/logout", sessionValidator, function (req, res, next) {
-  req.session.destroy((err) => {
-    if (err) {
-      res.status(400).send("Unable to log out");
-    } else {
-      res.status(200).send("Logged out successful");
-    }
-  });
-});
+app.post(
+  "/api/logout",
+  doubleCsrfProtection,sessionValidator,
+  function (req, res, next) {
+    console.log("validateRequest:", validateRequest(req));
+    console.log("CSRF Token:", req.headers["x-csrf-token"]);
+    console.log("Session CSRF Secret:", req.session.csrfSecret);
+
+    req.session.destroy((err) => {
+      if (err) {
+        res.status(400).send("Unable to log out");
+      } else {
+        res.status(200).send("Logged out successful");
+      }
+    });
+  }
+);
 
 app.get("/api/profile", sessionValidator, async function (req, res) {
   // TODO go to db and collect information about user(name,id, role, picture) and pass it in response
@@ -515,6 +553,14 @@ app.get(
     }
   }
 );
+
+app.get("/api/csrf-token", (req: Request, res: Response) => {
+  const csrfToken = generateCsrfToken(req, res, { validateOnReuse: false });
+  // console.log("Session ID:", req.session.id);
+  // console.log("CSRF Secret:", req.session.csrfSecret);
+  // console.log("csrfToken:", csrfToken);
+  res.json({ csrfToken: csrfToken });
+});
 
 app.listen(PORT, () => {
   console.log(`Running on Port ${PORT}`);

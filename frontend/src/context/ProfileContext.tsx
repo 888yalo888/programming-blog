@@ -1,7 +1,7 @@
 import React, { createContext, useEffect, useState } from "react";
-import axios from "axios";
-import { Profile } from "../src/types/profileContextTypes";
-import { UserProfile } from "../src/types/DtoTypes";
+import axios from '../utils/axios.ts'
+import { Profile } from "../types/profileContextTypes";
+import { UserProfile } from "../types/DtoTypes";
 
 const ProfileContext = createContext<Profile | undefined>(undefined);
 

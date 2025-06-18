@@ -1,4 +1,5 @@
-import axios from "axios";
+//import axios from './utils/axios.ts'
+import axios from "./utils/axios";
 import React, { useState } from "react";
 
 function Comments({ articleId }: { articleId: number }) {
