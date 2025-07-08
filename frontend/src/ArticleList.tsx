@@ -17,7 +17,9 @@ function ArticleList() {
     useEffect(() => {
         (async () => {
             try {
-                const response = await axios.get(`/articles?pageNumber=${pageNumber}&resultsOnPage=${resultsOnPage}`);
+                const response = await axios.get(
+                  `article/all?pageNumber=${pageNumber}&resultsOnPage=${resultsOnPage}`
+                );
                 //console.log('response', response);
                 setArticles(response.data);
                 //console.log('articles', articles);

@@ -20,3 +20,8 @@ export interface QueryParams {
   resultsOnPage?: string;
 }
 
+declare module "express-session" {
+  interface Session {
+    csrfSecret: string;
+  }
+}

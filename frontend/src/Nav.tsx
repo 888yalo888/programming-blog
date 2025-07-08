@@ -28,7 +28,7 @@ function Nav() {
       await axios.get("/csrf-token");
       
       const response = await axios.post(
-        "http://localhost:3000/api/logout",
+        "http://localhost:3000/api/profile/logout",
         {},
         { withCredentials: true }
       );
