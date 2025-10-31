@@ -13,6 +13,7 @@ router.post(
   body("title").exists().isString().notEmpty(),
   body("text").exists().isString().notEmpty(),
   async (req, res) => {
+    console.log("Entered article post method");
     const validationErrors = validationResult(req);
     if (!validationErrors.isEmpty()) {
       res.send({ errors: validationErrors.array() });
@@ -77,7 +78,7 @@ router.get(
       );
 
       const allPublishedArticles = await pool.query(
-        "SELECT title, id, comments_count, likes_count,created_at FROM articles WHERE is_published=true LIMIT $1 OFFSET $2",
+        "SELECT title, id, comments_count, likes_count,created_at,substring(text for 200) as text FROM articles WHERE is_published=true LIMIT $1 OFFSET $2",
         [actualResultsOnPage, actualResultsOnPage * (actualPageNumber - 1)]
       );
 
@@ -152,20 +153,20 @@ router.post(
     const user_id = req.session.passport?.user.id ?? null;
     // const user_id = req.body.user_id;
     const { comment } = req.body;
+    //console.log(req.body);
     const articleId = parseInt(req.params.id, 10);
 
     try {
       const commentResult = await pool.query(
-        "INSERT INTO comments_info (user_id, article_id,comment) VALUES ($1, $2, $3)",
+        "INSERT INTO comments_info (user_id, article_id,comment) VALUES ($1, $2, $3) RETURNING *",
         [user_id, articleId, comment]
       );
       res.status(200).json(commentResult.rows[0]);
+      //console.log('response',commentResult.rows[0])
     } catch (err) {
       console.error(err);
       res.status(500).json({ message: "" });
     }
-
-    res.json(req.file);
   }
 );
 
@@ -184,7 +185,11 @@ router.get(
 
     try {
       const commentsById = await pool.query(
-        "SELECT comment FROM comments_info WHERE article_id = $1",
+        `SELECT c.comment, c.user_id, c.created_at, u.name as user_name 
+         FROM comments_info c 
+         LEFT JOIN users u ON c.user_id = u.id 
+         WHERE c.article_id = $1 
+         ORDER BY c.created_at ASC`,
         [articleId]
       );
       res.status(200).json(commentsById.rows);

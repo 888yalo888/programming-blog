@@ -71,7 +71,7 @@ app.use(passport.session());
 
 app.use("/api/image", express.static("uploads"));
 
-const PORT = 3000;
+const PORT = 3001;
 
 passport.use(
   new GoogleStrategy(
@@ -118,4 +118,4 @@ app.get("/api/csrf-token", (req: Request, res: Response) => {
 
 app.listen(PORT, () => {
   console.log(`Running on Port ${PORT}`);
-});
+})

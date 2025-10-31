@@ -25,7 +25,10 @@ export interface PageResult<T>{
 }
 
 export interface CommentsModel {
-    text: string | null;
+  comment: string | null;
+  user_id: number;
+  user_name: string;
+  created_at: string;
 }
 
 export interface UserProfile {

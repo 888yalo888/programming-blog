@@ -4,11 +4,11 @@ import axios from 'axios'
 let csrfToken: string | null = null;
 
 
-axios.defaults.baseURL = "http://localhost:3000/api";
+axios.defaults.baseURL = "http://localhost:3001/api";
 axios.defaults.withCredentials = true;
 
 const axiosInstance = axios.create({
-  baseURL: "http://localhost:3000/api",
+  baseURL: "http://localhost:3001/api",
   withCredentials: true,
 });
 

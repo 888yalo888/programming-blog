@@ -6,7 +6,7 @@ import { Navigate } from "react-router";
 import ProfileContext from "./context/ProfileContext";
 
 function CreateArticle(): JSX.Element {
-  const [markdown, setMarkdown] = useState("# Hello World");
+  const [markdown, setMarkdown] = useState("");
   const titleInput = createRef<HTMLInputElement>();
   // const [profile, setProfile] = useState<UserProfile | null>(null);
   // const [error, setError] = useState<string | null>(null);

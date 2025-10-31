@@ -7,7 +7,7 @@ import ArticleList from './ArticleList.tsx';
 import Article from './Article.tsx';
 import Nav from './Nav.tsx';
 import { GoogleOAuthProvider } from "@react-oauth/google";
-import { ProfileContextProvider } from './context/ProfileContext'
+import { ProfileContextProvider } from "./context/ProfileContext";
 
 const clientId = import.meta.env.VITE_REACT_APP_GOOGLE_CLIENT_ID;
 

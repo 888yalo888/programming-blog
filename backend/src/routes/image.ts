@@ -55,7 +55,7 @@ router.post(
       res.status(500).send("Error processing image");
     }
 
-    const imageURL = `http://localhost:3000/api/image/l-${savedImage}.jpeg`;
+    const imageURL = `http://localhost:3001/api/image/l-${savedImage}.jpeg`;
 
     res.status(200).send(imageURL);
   }

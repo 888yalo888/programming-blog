@@ -2,7 +2,7 @@ import GoogleButton from "react-google-button";
 
 function LoginSignup() {
     const signIn = () => {
-        window.open("http://localhost:3000/api/auth/google", "_self");
+        window.open("http://localhost:3001/api/auth/google", "_self");
     };
     return (
         <>
