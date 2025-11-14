@@ -13,6 +13,9 @@ report.[0-9]*.[0-9]*.[0-9]*.[0-9]*.json
 #uploads folders at all levels
 **/uploads/
 
+#ignore sql seed data file
+blog_2025-11-06_212555.sql
+
 # Runtime data
 pids
 *.pid
