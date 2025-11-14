@@ -1,10 +1,9 @@
-import axios from './utils/axios.ts'
+import axios from '../utils/axios.ts'
 import { useContext } from "react";
-import GoogleButton from "react-google-button";
 import { Link } from "react-router";
-import ProfileContext from "./context/ProfileContext";
-import WriteSvg from "./WriteSvg.tsx";
-import GoogleLogInSvg from "./GoogleLogInSvg.tsx";
+import ProfileContext from "../context/ProfileContext";
+import WriteSvg from "../icons/WriteSvg.tsx";
+import GoogleLogInSvg from "../icons/GoogleLogInSvg.tsx";
 
 function Nav() {
   const context = useContext(ProfileContext);
@@ -24,15 +23,16 @@ function Nav() {
     try {
       await axios.get("/csrf-token");
 
-      const response = await axios.post(
+      await axios.post(
         "http://localhost:3001/api/profile/logout",
         {},
         { withCredentials: true }
       );
       console.log("Logged out");
       window.location.href = "http://localhost:5173";
-    } catch (err) {
-      console.log("Logged out", err.response?.data || err.message);
+    } catch (err: unknown) {
+      const error = err as { response?: { data?: unknown }; message?: string };
+      console.log("Logged out", error.response?.data || error.message);
     }
   };
 

@@ -1,10 +1,10 @@
-import axios from "./utils/axios.ts";
+import axios from "../utils/axios.ts";
 import { useEffect, useState, useContext } from "react";
 import { useParams } from "react-router";
 import Markdown from "react-markdown";
-import { ArticleModel, CommentsModel } from "./types/DtoTypes";
-import ProfileContext from "./context/ProfileContext";
-import Comments from "./Comments.tsx";
+import { ArticleModel, CommentsModel } from "../types/DtoTypes";
+import ProfileContext from "../context/ProfileContext";
+import Comments from "../components/Comments.tsx";
 
 function Article() {
   const [article, setArticle] = useState<ArticleModel | null>(null);

@@ -78,7 +78,7 @@ passport.use(
     {
       clientID: process.env.GOOGLE_CLIENT_ID!,
       clientSecret: process.env.GOOGLE_CLIENT_SECRET!,
-      callbackURL: "/api/auth/google/callback", //if authentication is successful it brings us to this callbackURL so tr
+      callbackURL: "http://localhost:3001/api/auth/google/callback", //if authentication is successful it brings us to this callbackURL so tr
       accessType: "offline",
       prompt: "consent",
     },

@@ -1,7 +1,7 @@
-import axios from "./utils/axios";
+import axios from "../utils/axios";
 import { useState, useContext } from "react";
-import ProfileContext from "./context/ProfileContext";
-import { CommentsModel } from "./types/DtoTypes";
+import ProfileContext from "../context/ProfileContext";
+import { CommentsModel } from "../types/DtoTypes";
 
 function Comments({
   articleId,
@@ -19,7 +19,6 @@ function Comments({
     if (!comment.trim() || !profileContext?.profile?.id) return;
 
     const userId = parseInt(profileContext.profile.id);
-    const user_name = profileContext.profile.name
 
     axios
       .post(`/article/${articleId}/comment`, {

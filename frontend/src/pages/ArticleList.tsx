@@ -1,9 +1,8 @@
-import axios from "./utils/axios.ts";
+import axios from "../utils/axios.ts";
 import { useEffect, useState } from "react";
-import { Link } from "react-router";
-import { ArticleModel, PageResult } from "./types/DtoTypes";
-import Pagination from "./Pagination";
-import Markdown from 'react-markdown'
+import { ArticleModel, PageResult } from "../types/DtoTypes";
+import Pagination from "../components/Pagination";
+import ArticleLink from "../components/ArticleLink.tsx";
 
 function ArticleList() {
   const [articles, setArticles] = useState<PageResult<ArticleModel> | null>(
@@ -40,14 +39,14 @@ function ArticleList() {
     })();
   }, [pageNumber]);
     
-  const formatDate = (dateString: string) => {
-    const options: Intl.DateTimeFormatOptions = { 
-        year: 'numeric', 
-        month: 'long', 
-        day: 'numeric' 
-    };
-    return new Date(dateString).toLocaleDateString('en-US', options);
-};
+//   const formatDate = (dateString: string) => {
+//     const options: Intl.DateTimeFormatOptions = { 
+//         year: 'numeric', 
+//         month: 'long', 
+//         day: 'numeric' 
+//     };
+//     return new Date(dateString).toLocaleDateString('en-US', options);
+// };
 
   return (
     <div className="flex flex-col justify-between max-h-[calc(100vh-11vh)]">
@@ -57,20 +56,11 @@ function ArticleList() {
         ) : error ? (
           <div> {error}</div>
         ) : (
-          articles?.page_results?.map((item: ArticleModel) => (
-            <div key={item.id} className="mb-8 w-full max-w-2xl">
-              <Link
-                className="text-gray-800 text-xl font-bold block mb-2"
-                to={`/article/${item.id}`}
-              >
-                {item.title}
-              </Link>
-              <div className="text-[#6B6B6B]">
-                {formatDate(item.created_at)}
-              </div>
-              <Markdown className="text-[#6B6B6B] mt-4">{item.text}</Markdown>
-            </div>
-          ))
+          <div className="w-full max-w-2xl"> {/* Add this wrapper */}
+          {articles?.page_results?.map((item: ArticleModel) => (
+            <ArticleLink key={item.id} item={item} />
+          ))}
+        </div>
         )}
       </div>
 
@@ -78,7 +68,7 @@ function ArticleList() {
         <Pagination
           totalPages={totalPages ?? 0}
           activePage={pageNumber}
-          onPageChange={(pageNumber) => setPageNumber(pageNumber)}
+          onPageChange={(pageNumber: number) => setPageNumber(pageNumber)}
         />
       </div>
     </div>

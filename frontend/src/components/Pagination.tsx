@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { PaginationProps } from "./types/propsTypes";
+import { PaginationProps } from "../types/propsTypes";
 
 function Pagination(props: PaginationProps) {
   const [activePage, setActivePage] = useState(props.activePage);

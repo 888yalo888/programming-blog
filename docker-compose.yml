@@ -1,0 +1,66 @@
+version: '3.8'
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: blog-postgres
+    environment:
+      POSTGRES_USER: ${POSTGRESQL_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRESQL_POOL_PASSWORD}
+      POSTGRES_DB: ${POSTGRESQL_DATABASE:-blog}
+    ports:
+      - "${POSTGRESQL_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRESQL_USER:-postgres}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - blog-network
+
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: blog-backend
+    ports:
+      - "3001:3001"
+    environment:
+      POSTGRESQL_HOST: postgres
+      POSTGRESQL_USER: ${POSTGRESQL_USER:-postgres}
+      POSTGRESQL_DATABASE: ${POSTGRESQL_DATABASE:-blog}
+      POSTGRESQL_POOL_PASSWORD: ${POSTGRESQL_POOL_PASSWORD}
+      POSTGRESQL_PORT: 5432
+      PG_SESSION_SECRET_WORD: ${PG_SESSION_SECRET_WORD}
+      GOOGLE_CLIENT_ID: ${GOOGLE_CLIENT_ID}
+      GOOGLE_CLIENT_SECRET: ${GOOGLE_CLIENT_SECRET}
+    volumes:
+      - ./backend/uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - blog-network
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: blog-frontend
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+    networks:
+      - blog-network
+
+volumes:
+  postgres_data:
+
+networks:
+  blog-network:
+    driver: bridge
+

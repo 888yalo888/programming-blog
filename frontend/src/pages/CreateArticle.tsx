@@ -1,9 +1,9 @@
 import { Editable, useEditor } from "@wysimark/react";
 import { createRef, useCallback, useEffect, useState, useContext } from "react";
-import axios from './utils/axios.ts'
-import { CreateArticleModel, UserProfile } from "./types/DtoTypes";
+import axios from '../utils/axios.ts'
+import { CreateArticleModel } from "../types/DtoTypes";
 import { Navigate } from "react-router";
-import ProfileContext from "./context/ProfileContext";
+import ProfileContext from "../context/ProfileContext";
 
 function CreateArticle(): JSX.Element {
   const [markdown, setMarkdown] = useState("");

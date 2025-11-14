@@ -1,11 +1,11 @@
 import { StrictMode } from 'react'
 import { createRoot } from 'react-dom/client'
 import './index.css'
-import CreateArticle from './CreateArticle.tsx'
+import CreateArticle from './pages/CreateArticle.tsx'
 import { BrowserRouter, Routes, Route } from 'react-router';
-import ArticleList from './ArticleList.tsx';
-import Article from './Article.tsx';
-import Nav from './Nav.tsx';
+import ArticleList from './pages/ArticleList.tsx';
+import Article from './pages/Article.tsx';
+import Nav from './components/Nav.tsx';
 import { GoogleOAuthProvider } from "@react-oauth/google";
 import { ProfileContextProvider } from "./context/ProfileContext";
 
